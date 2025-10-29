@@ -141,8 +141,8 @@
 </head>
 <body>
     <div class="container">
-        <h1>💰 Gastos hasta fin de año</h1>
-        <p class="subtitle">26 de octubre - 31 de diciembre 2025</p>
+        <h1 id="mainTitle"></h1>
+        <p class="subtitle" id="dateRange">Cargando fechas...</p>
 
         <div class="results show" id="results">
             <div class="result-item highlight">
@@ -163,10 +163,41 @@
          */
         const CONFIG = {
             DAILY_EXPENSE: 12.10,
-            START_DATE: '2025-10-26',
             END_DATE: '2025-12-31',
             WORK_DAYS: [1, 2, 3, 4] // Lunes a jueves
         };
+
+        /**
+         * DateUtils: Utilidades para manejo de fechas
+         * Single Responsibility Principle
+         */
+        class DateUtils {
+            /**
+             * Obtiene la fecha actual sin hora
+             */
+            static getCurrentDate() {
+                const today = new Date();
+                today.setHours(0, 0, 0, 0);
+                return today;
+            }
+
+            /**
+             * Crea una fecha desde string
+             */
+            static createDate(dateString) {
+                const date = new Date(dateString);
+                date.setHours(0, 0, 0, 0);
+                return date;
+            }
+
+            /**
+             * Verifica si una fecha es válida y futura
+             */
+            static isValidFutureDate(date) {
+                const today = this.getCurrentDate();
+                return date instanceof Date && !isNaN(date) && date >= today;
+            }
+        }
 
         /**
          * ExpenseCalculator: Encargado solo de cálculos
@@ -274,6 +305,16 @@
             static updateSummary(elementId, summary) {
                 document.getElementById(elementId).innerHTML = summary;
             }
+
+            static updateDateRange(elementId, startDate, endDate) {
+                const formattedStart = DateFormatter.format(startDate);
+                const formattedEnd = DateFormatter.format(endDate);
+                document.getElementById(elementId).textContent = `${formattedStart} - ${formattedEnd}`;
+            }
+
+            static updateMainTitle(elementId, startDate) {
+                document.getElementById(elementId).textContent = `💰 Gastos hasta fin de año`;
+            }
         }
 
         /**
@@ -290,9 +331,17 @@
              * Método principal que orquesta el flujo de la aplicación
              */
             run() {
-                const startDate = new Date(this.config.START_DATE);
-                const endDate = new Date(this.config.END_DATE);
+                // Usar fecha actual como fecha de inicio
+                const startDate = DateUtils.getCurrentDate();
+                const endDate = DateUtils.createDate(this.config.END_DATE);
                 const dailyExpense = this.config.DAILY_EXPENSE;
+
+                // Verificar que la fecha de fin sea válida
+                if (!DateUtils.isValidFutureDate(endDate) && endDate < startDate) {
+                    console.warn('La fecha de fin ha pasado. Mostrando gastos hasta hoy.');
+                    // Si la fecha de fin ya pasó, usar solo el día actual
+                    endDate.setTime(startDate.getTime());
+                }
 
                 // Ejecutar cálculos
                 const results = this.calculator.execute(startDate, endDate, dailyExpense);
@@ -302,8 +351,36 @@
                 const summary = SummaryBuilder.build(results.expenseDays, dailyExpense, formattedExpense);
 
                 // Actualizar UI
+                UIUpdater.updateMainTitle('mainTitle', startDate);
+                UIUpdater.updateDateRange('dateRange', startDate, endDate);
                 UIUpdater.updateExpenseValue('totalExpense', formattedExpense);
                 UIUpdater.updateSummary('summary', summary);
+            }
+
+            /**
+             * Programa actualizaciones automáticas
+             */
+            scheduleUpdates() {
+                // Actualizar cada minuto para capturar cambios de día
+                setInterval(() => {
+                    this.run();
+                }, 60000);
+
+                // Actualizar inmediatamente al cambio de día
+                const now = new Date();
+                const tomorrow = new Date(now);
+                tomorrow.setDate(tomorrow.getDate() + 1);
+                tomorrow.setHours(0, 0, 0, 0);
+                
+                const msUntilMidnight = tomorrow.getTime() - now.getTime();
+                
+                setTimeout(() => {
+                    this.run();
+                    // Después del primer cambio de día, actualizar cada 24 horas
+                    setInterval(() => {
+                        this.run();
+                    }, 24 * 60 * 60 * 1000);
+                }, msUntilMidnight);
             }
         }
 
@@ -313,7 +390,12 @@
         window.addEventListener('load', () => {
             const calculator = new ExpenseCalculator(CONFIG);
             const app = new ExpenseApp(calculator, CONFIG);
+            
+            // Ejecutar primera vez
             app.run();
+            
+            // Programar actualizaciones automáticas
+            app.scheduleUpdates();
         });
     </script>
 </body>
