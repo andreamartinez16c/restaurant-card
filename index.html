@@ -280,13 +280,11 @@
              * Ejecuta todos los cálculos y retorna los resultados
              */
             execute(startDate, endDate, dailyExpense) {
+                const expenseDays = this.calculateExpenseDays(startDate, endDate);
                 return {
                     totalDays: this.calculateTotalDays(startDate, endDate),
-                    expenseDays: this.calculateExpenseDays(startDate, endDate),
-                    totalExpense: this.calculateTotalExpense(
-                        this.calculateExpenseDays(startDate, endDate),
-                        dailyExpense
-                    )
+                    expenseDays: expenseDays,
+                    totalExpense: this.calculateTotalExpense(expenseDays, dailyExpense)
                 };
             }
         }
