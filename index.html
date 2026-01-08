@@ -146,12 +146,21 @@
 
         <div class="results show" id="results">
             <div class="result-item highlight">
-                <div class="result-label">Gasto total</div>
-                <div class="result-value" id="totalExpense">0,00 €</div>
+                <div class="result-label">Primer Periodo</div>
+                <div class="result-value" id="period1Remaining">0,00 €</div>
             </div>
 
             <div class="details">
-                <p id="summary"></p>
+                <p id="period1Summary"></p>
+            </div>
+
+            <div class="result-item highlight">
+                <div class="result-label">Segundo Periodo</div>
+                <div class="result-value" id="period2Remaining">0,00 €</div>
+            </div>
+
+            <div class="details">
+                <p id="period2Summary"></p>
             </div>
         </div>
     </div>
@@ -163,8 +172,21 @@
          */
         const CONFIG = {
             DAILY_EXPENSE: 12.10,
-            END_DATE: '2025-12-31',
-            WORK_DAYS: [1, 2, 3, 4] // Lunes a jueves
+            WORK_DAYS: [1, 2, 3, 4], // Lunes a jueves
+            PERIODS: [
+                {
+                    name: 'Primer Periodo',
+                    startAmount: 1089,
+                    startDate: '2026-01-01',
+                    endDate: '2026-06-30'
+                },
+                {
+                    name: 'Segundo Periodo',
+                    startAmount: 1125,
+                    startDate: '2026-07-01',
+                    endDate: '2026-12-31'
+                }
+            ]
         };
 
         /**
@@ -257,6 +279,47 @@
                     )
                 };
             }
+
+            /**
+             * Calcula el saldo restante para un periodo
+             */
+            calculatePeriodRemaining(period, currentDate, dailyExpense) {
+                const periodStart = DateUtils.createDate(period.startDate);
+                const periodEnd = DateUtils.createDate(period.endDate);
+                
+                // Si la fecha actual es antes del periodo, no se ha gastado nada
+                if (currentDate < periodStart) {
+                    return {
+                        remaining: period.startAmount,
+                        expenseDays: 0,
+                        totalExpense: 0,
+                        status: 'future'
+                    };
+                }
+                
+                // Si la fecha actual es después del periodo, calcular todo el periodo
+                if (currentDate > periodEnd) {
+                    const expenseDays = this.calculateExpenseDays(periodStart, periodEnd);
+                    const totalExpense = this.calculateTotalExpense(expenseDays, dailyExpense);
+                    return {
+                        remaining: period.startAmount - totalExpense,
+                        expenseDays: expenseDays,
+                        totalExpense: totalExpense,
+                        status: 'completed'
+                    };
+                }
+                
+                // Si estamos dentro del periodo, calcular hasta hoy
+                const expenseDays = this.calculateExpenseDays(periodStart, currentDate);
+                const totalExpense = this.calculateTotalExpense(expenseDays, dailyExpense);
+                
+                return {
+                    remaining: period.startAmount - totalExpense,
+                    expenseDays: expenseDays,
+                    totalExpense: totalExpense,
+                    status: 'active'
+                };
+            }
         }
 
         /**
@@ -291,6 +354,18 @@
                 const dailyExpenseStr = NumberFormatter.formatCurrency(dailyExpense);
                 return `De <strong>lunes a jueves</strong>, gastando <strong>${dailyExpenseStr} €</strong> al día durante <strong>${expenseDays} días</strong>.`;
             }
+
+            static buildPeriodSummary(period, result, dailyExpense) {
+                const dailyExpenseStr = NumberFormatter.formatCurrency(dailyExpense);
+                const startAmount = NumberFormatter.formatCurrency(period.startAmount);
+                const totalExpense = NumberFormatter.formatCurrency(result.totalExpense);
+                
+                if (result.status === 'future') {
+                    return `<strong>Periodo futuro.</strong> Inicia con <strong>${startAmount} €</strong>.`;
+                }
+                
+                return `Inicia con <strong>${startAmount} €</strong>. Gastado <strong>${totalExpense} €</strong> en <strong>${result.expenseDays} días</strong> (${dailyExpenseStr} € al día, lunes a jueves).`;
+            }
         }
 
         /**
@@ -313,7 +388,15 @@
             }
 
             static updateMainTitle(elementId, startDate) {
-                document.getElementById(elementId).textContent = `💰 Gastos hasta fin de año`;
+                document.getElementById(elementId).textContent = `💰 Calculadora de Gastos`;
+            }
+
+            static updatePeriod(periodNum, result, period, dailyExpense) {
+                const remainingFormatted = NumberFormatter.formatCurrency(result.remaining);
+                const summary = SummaryBuilder.buildPeriodSummary(period, result, dailyExpense);
+                
+                this.updateExpenseValue(`period${periodNum}Remaining`, remainingFormatted);
+                this.updateSummary(`period${periodNum}Summary`, summary);
             }
         }
 
@@ -331,30 +414,30 @@
              * Método principal que orquesta el flujo de la aplicación
              */
             run() {
-                // Usar fecha actual como fecha de inicio
-                const startDate = DateUtils.getCurrentDate();
-                const endDate = DateUtils.createDate(this.config.END_DATE);
+                const currentDate = DateUtils.getCurrentDate();
                 const dailyExpense = this.config.DAILY_EXPENSE;
 
-                // Verificar que la fecha de fin sea válida
-                if (!DateUtils.isValidFutureDate(endDate) && endDate < startDate) {
-                    console.warn('La fecha de fin ha pasado. Mostrando gastos hasta hoy.');
-                    // Si la fecha de fin ya pasó, usar solo el día actual
-                    endDate.setTime(startDate.getTime());
+                // Actualizar título
+                UIUpdater.updateMainTitle('mainTitle', currentDate);
+
+                // Calcular y mostrar fecha general del rango
+                if (this.config.PERIODS && this.config.PERIODS.length > 0) {
+                    const firstPeriod = this.config.PERIODS[0];
+                    const lastPeriod = this.config.PERIODS[this.config.PERIODS.length - 1];
+                    const startDate = DateUtils.createDate(firstPeriod.startDate);
+                    const endDate = DateUtils.createDate(lastPeriod.endDate);
+                    UIUpdater.updateDateRange('dateRange', startDate, endDate);
+
+                    // Procesar cada periodo
+                    this.config.PERIODS.forEach((period, index) => {
+                        const result = this.calculator.calculatePeriodRemaining(
+                            period,
+                            currentDate,
+                            dailyExpense
+                        );
+                        UIUpdater.updatePeriod(index + 1, result, period, dailyExpense);
+                    });
                 }
-
-                // Ejecutar cálculos
-                const results = this.calculator.execute(startDate, endDate, dailyExpense);
-
-                // Formatear resultados
-                const formattedExpense = NumberFormatter.formatCurrency(results.totalExpense);
-                const summary = SummaryBuilder.build(results.expenseDays, dailyExpense, formattedExpense);
-
-                // Actualizar UI
-                UIUpdater.updateMainTitle('mainTitle', startDate);
-                UIUpdater.updateDateRange('dateRange', startDate, endDate);
-                UIUpdater.updateExpenseValue('totalExpense', formattedExpense);
-                UIUpdater.updateSummary('summary', summary);
             }
 
             /**
