@@ -145,8 +145,18 @@
         <p class="subtitle" id="dateRange">Cargando fechas...</p>
 
         <div class="results show" id="results">
+            <div class="result-item">
+                <div class="result-label">Primer Periodo (1/1 - 30/6)</div>
+                <div class="result-value" id="period1Expense">0,00 €</div>
+            </div>
+
+            <div class="result-item">
+                <div class="result-label">Segundo Periodo (1/7 - 31/12)</div>
+                <div class="result-value" id="period2Expense">0,00 €</div>
+            </div>
+
             <div class="result-item highlight">
-                <div class="result-label">Gasto total</div>
+                <div class="result-label">Gasto Total Anual</div>
                 <div class="result-value" id="totalExpense">0,00 €</div>
             </div>
 
@@ -163,7 +173,6 @@
          */
         const CONFIG = {
             DAILY_EXPENSE: 12.10,
-            END_DATE: '2025-12-31',
             WORK_DAYS: [1, 2, 3, 4] // Lunes a jueves
         };
 
@@ -196,6 +205,29 @@
             static isValidFutureDate(date) {
                 const today = this.getCurrentDate();
                 return date instanceof Date && !isNaN(date) && date >= today;
+            }
+
+            /**
+             * Obtiene el año actual
+             */
+            static getCurrentYear() {
+                return new Date().getFullYear();
+            }
+
+            /**
+             * Calcula los periodos del año
+             */
+            static getYearPeriods(year) {
+                return {
+                    period1: {
+                        start: this.createDate(`${year}-01-01`),
+                        end: this.createDate(`${year}-06-30`)
+                    },
+                    period2: {
+                        start: this.createDate(`${year}-07-01`),
+                        end: this.createDate(`${year}-12-31`)
+                    }
+                };
             }
         }
 
@@ -287,9 +319,14 @@
          * Single Responsibility Principle
          */
         class SummaryBuilder {
-            static build(expenseDays, dailyExpense, formattedExpense) {
+            static build(period1Days, period2Days, dailyExpense, period1Expense, period2Expense, totalExpense) {
                 const dailyExpenseStr = NumberFormatter.formatCurrency(dailyExpense);
-                return `De <strong>lunes a jueves</strong>, gastando <strong>${dailyExpenseStr} €</strong> al día durante <strong>${expenseDays} días</strong>.`;
+                const period1ExpenseStr = NumberFormatter.formatCurrency(period1Expense);
+                const period2ExpenseStr = NumberFormatter.formatCurrency(period2Expense);
+                
+                return `<strong>Primer Periodo:</strong> ${period1Days} días de trabajo × ${dailyExpenseStr} € = ${period1ExpenseStr} €<br>` +
+                       `<strong>Segundo Periodo:</strong> ${period2Days} días de trabajo × ${dailyExpenseStr} € = ${period2ExpenseStr} €<br>` +
+                       `Gastando de <strong>lunes a jueves</strong>, <strong>${dailyExpenseStr} €</strong> al día.`;
             }
         }
 
@@ -302,18 +339,22 @@
                 document.getElementById(elementId).textContent = formattedExpense + ' €';
             }
 
+            static updatePeriodExpenses(period1Expense, period2Expense, totalExpense) {
+                this.updateExpenseValue('period1Expense', NumberFormatter.formatCurrency(period1Expense));
+                this.updateExpenseValue('period2Expense', NumberFormatter.formatCurrency(period2Expense));
+                this.updateExpenseValue('totalExpense', NumberFormatter.formatCurrency(totalExpense));
+            }
+
             static updateSummary(elementId, summary) {
                 document.getElementById(elementId).innerHTML = summary;
             }
 
-            static updateDateRange(elementId, startDate, endDate) {
-                const formattedStart = DateFormatter.format(startDate);
-                const formattedEnd = DateFormatter.format(endDate);
-                document.getElementById(elementId).textContent = `${formattedStart} - ${formattedEnd}`;
+            static updateDateRange(elementId, year) {
+                document.getElementById(elementId).textContent = `Año ${year}`;
             }
 
-            static updateMainTitle(elementId, startDate) {
-                document.getElementById(elementId).textContent = `💰 Gastos hasta fin de año`;
+            static updateMainTitle(elementId, year) {
+                document.getElementById(elementId).textContent = `💰 Gastos ${year}`;
             }
         }
 
@@ -331,29 +372,45 @@
              * Método principal que orquesta el flujo de la aplicación
              */
             run() {
-                // Usar fecha actual como fecha de inicio
-                const startDate = DateUtils.getCurrentDate();
-                const endDate = DateUtils.createDate(this.config.END_DATE);
+                const year = DateUtils.getCurrentYear();
+                const periods = DateUtils.getYearPeriods(year);
                 const dailyExpense = this.config.DAILY_EXPENSE;
 
-                // Verificar que la fecha de fin sea válida
-                if (!DateUtils.isValidFutureDate(endDate) && endDate < startDate) {
-                    console.warn('La fecha de fin ha pasado. Mostrando gastos hasta hoy.');
-                    // Si la fecha de fin ya pasó, usar solo el día actual
-                    endDate.setTime(startDate.getTime());
-                }
+                // Calcular gastos para el primer periodo
+                const period1Results = this.calculator.execute(
+                    periods.period1.start,
+                    periods.period1.end,
+                    dailyExpense
+                );
 
-                // Ejecutar cálculos
-                const results = this.calculator.execute(startDate, endDate, dailyExpense);
+                // Calcular gastos para el segundo periodo
+                const period2Results = this.calculator.execute(
+                    periods.period2.start,
+                    periods.period2.end,
+                    dailyExpense
+                );
 
-                // Formatear resultados
-                const formattedExpense = NumberFormatter.formatCurrency(results.totalExpense);
-                const summary = SummaryBuilder.build(results.expenseDays, dailyExpense, formattedExpense);
+                // Calcular total anual
+                const totalExpense = period1Results.totalExpense + period2Results.totalExpense;
+
+                // Formatear y actualizar UI
+                const summary = SummaryBuilder.build(
+                    period1Results.expenseDays,
+                    period2Results.expenseDays,
+                    dailyExpense,
+                    period1Results.totalExpense,
+                    period2Results.totalExpense,
+                    totalExpense
+                );
 
                 // Actualizar UI
-                UIUpdater.updateMainTitle('mainTitle', startDate);
-                UIUpdater.updateDateRange('dateRange', startDate, endDate);
-                UIUpdater.updateExpenseValue('totalExpense', formattedExpense);
+                UIUpdater.updateMainTitle('mainTitle', year);
+                UIUpdater.updateDateRange('dateRange', year);
+                UIUpdater.updatePeriodExpenses(
+                    period1Results.totalExpense,
+                    period2Results.totalExpense,
+                    totalExpense
+                );
                 UIUpdater.updateSummary('summary', summary);
             }
 
