@@ -146,12 +146,12 @@
 
         <div class="results show" id="results">
             <div class="result-item">
-                <div class="result-label">Primer Periodo (1/1 - 30/6)</div>
+                <div class="result-label">Primer Período (1/1 - 30/6)</div>
                 <div class="result-value" id="period1Expense">0,00 €</div>
             </div>
 
             <div class="result-item">
-                <div class="result-label">Segundo Periodo (1/7 - 31/12)</div>
+                <div class="result-label">Segundo Período (1/7 - 31/12)</div>
                 <div class="result-value" id="period2Expense">0,00 €</div>
             </div>
 
@@ -322,8 +322,8 @@
                 const period1ExpenseStr = NumberFormatter.formatCurrency(period1Expense);
                 const period2ExpenseStr = NumberFormatter.formatCurrency(period2Expense);
                 
-                return `<strong>Primer Periodo:</strong> ${period1Days} días de trabajo × ${dailyExpenseStr} € = ${period1ExpenseStr} €<br>` +
-                       `<strong>Segundo Periodo:</strong> ${period2Days} días de trabajo × ${dailyExpenseStr} € = ${period2ExpenseStr} €<br>` +
+                return `<strong>Primer Período:</strong> ${period1Days} días de trabajo × ${dailyExpenseStr} € = ${period1ExpenseStr} €<br>` +
+                       `<strong>Segundo Período:</strong> ${period2Days} días de trabajo × ${dailyExpenseStr} € = ${period2ExpenseStr} €<br>` +
                        `Gastando de <strong>lunes a jueves</strong>, <strong>${dailyExpenseStr} €</strong> al día.`;
             }
         }
